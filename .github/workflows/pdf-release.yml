@@ -1,0 +1,70 @@
+name: PDF Release & Pages Deploy
+
+on:
+  workflow_call:
+    inputs:
+      TEX_FILE_NAME:
+        description: 'Base name of your .tex/.pdf'
+        required: true
+        type: string
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+
+permissions:
+  contents: write    # for GitHub Releases
+  pages: write       # for Pages
+  id-token: write    # for configure-pages
+
+jobs:
+  build_and_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Compile LaTeX
+        uses: xu-cheng/latex-action@v2
+        with:
+          root_file: ${{ inputs.TEX_FILE_NAME }}.tex
+
+      - name: Delete old Release
+        uses: actions/github-script@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            try {
+              const { data: { id } } = await github.rest.repos.getLatestRelease({ owner, repo });
+              await github.rest.repos.deleteRelease({ owner, repo, release_id: id });
+            } catch {}
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          ts="latest_$(date +'%Y-%m-%d_%H-%M')"
+          echo "release_tag=$ts" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: latest version
+          body: Latest version of `${{ inputs.TEX_FILE_NAME }}.pdf`
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          files: ${{ inputs.TEX_FILE_NAME }}.pdf
+
+      - name: Prepare Pages content
+        run: |
+          mkdir -p public
+          cp "${{ inputs.TEX_FILE_NAME }}.pdf" public/
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
