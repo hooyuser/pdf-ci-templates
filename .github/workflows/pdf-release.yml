@@ -7,9 +7,6 @@ on:
         description: 'Base name of your .tex/.pdf'
         required: true
         type: string
-    secrets:
-      GITHUB_TOKEN:
-        required: true
 
 permissions:
   contents: write    # for GitHub Releases
